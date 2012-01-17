@@ -48,51 +48,107 @@ function cdio2011_doAction($collection_pid, $relationship, $input_directory) {
   drush_log('Starting ingest');
   drush_log("Data path: " . $input_directory);
 
-  $directories = array();
-  $directories = scandir($input_directory);
+  $track_directories = array();
+  $track_directories = scandir($input_directory);
 
-  //loop through the mxd directories, the acutal files are in subdirs
-  foreach ($directories as $directory) {
-    $mxd_files = NULL;
-
-    if ($directory === '.' || $directory === '..') {
+  //loop through the track directories, the acutal files are in subdirs
+  foreach ($track_directories as $track_directory)
+  {
+    if ($track_directory === '.' || $track_directory === '..' || !is_dir($input_directory.'/'.$track_directory)) {
       continue;
     }
 
-    $mxd_file = false;
-    $paper_file = false;
-    $slide_file = false;
-    $sdvideo_file = false;
-    $hdvideo_file = false;
+    $track_id = $track_directory;
+    $track_name_file = $input_directory . '/' . $track_directory . "/track.label.txt";
+    if (is_file($track_name_file)) {
+      $track_name = trim(file_get_contents($track_name_file));
+    } 
+    else {
+      drush_log("No track name for track directory " . $track_id);
+      drupal_set_message("No track name for track directory " . $track_id);
+      continue;
+    }
 
-    //this dir path is a sub dir of $input_directory
-    $directory_path = $input_directory . '/' . $directory;
+    $session_directories = array();
+    $session_directories = scandir($input_directory.'/'.$track_directory);
 
-    //traverse the sub directories that have mxd in them.
-    if (is_dir($directory_path)) {
-      drush_log('Searching for MXD in directory: ' . $directory);
-      $files = scandir($directory_path);
-
-      if( !in_array ( 'mxd.xml', $files ) ) {
-        drush_log('No MXD in this directory, skipping...' );
+    //loop through session directories
+    foreach ($session_directories as $session_directory)
+    {
+      if ($session_directory === '.' || $session_directory === '..' || !is_dir($input_directory.'/'.$track_directory.'/'.$session_directory)) {
         continue;
       }
+
+      $session_id = $session_directory;
+      $session_name_file = $input_directory . '/' . $track_directory . '/' . $session_directory . "/session.label.txt";
+      if (is_file($session_name_file)) {
+        $session_name = trim(file_get_contents($session_name_file));
+      } 
+      else {
+        drush_log("No session name for session directory " . $session_id);
+        drupal_set_message("No session name for session directory " . $session_id);
+        continue;
+      }
+
+      $talk_directories = array();
+      $talk_directories = scandir($input_directory.'/'.$track_directory.'/'.$session_directory);
+
+      //loop through talk directories
+      foreach ($talk_directories as $talk_directory)
+      {
+
+        $mxd_files = NULL;
+
+        if ($talk_directory === '.' || $talk_directory === '..') {
+          continue;
+        }
+
+        $mxd_file = false;
+        $paper_file = false;
+        $slide_file = false;
+        $sdvideo_file = false;
+        $hdvideo_file = false;
+
+        //this dir path is a sub dir of $input_directory
+        $directory_path = $input_directory.'/'.$track_directory.'/'.$session_directory.'/'.$talk_directory;
+
+        //traverse the sub directories that have mxd in them.
+        if (is_dir($directory_path)) {
+          drush_log('Searching for MXD in directory: ' . $directory);
+          $files = scandir($directory_path);
+
+          if( !in_array ( 'mxd.xml', $files ) ) {
+            drush_log('No MXD in this directory, skipping...' );
+            continue;
+          }
       
-      $mxd_file = $directory_path . '/mxd.xml';
-      $paper_file = in_array( 'paper.pdf', $files ) ? $directory_path.'/'.'paper.pdf' : false;
-      $slide_file = in_array( 'slide.pdf', $files ) ? $directory_path.'/'.'slide.pdf' : false;
-      $video_file = in_array( 'video.360.mp4', $files ) ? $directory_path.'/'.'video.360.mp4' : false;
-      if (!$video_file)
-        $video_file = in_array( 'video.720.mp4', $files ) ? $directory_path.'/'.'video.720.mp4' : false;
-      if (!$video_file)
-        $video_file = in_array( 'video.360.url', $files ) ? $directory_path.'/'.'video.360.url' : false;
-      if (!$video_file)
-        $video_file = in_array( 'video.720.url', $files ) ? $directory_path.'/'.'video.720.url' : false;
+          $mxd_file = $directory_path . '/mxd.xml';
+          $paper_file = in_array( 'paper.pdf', $files ) ? $directory_path.'/'.'paper.pdf' : false;
+          $slide_file = in_array( 'slide.pdf', $files ) ? $directory_path.'/'.'slide.pdf' : false;
+          $video_file = in_array( 'video.360.mp4', $files ) ? $directory_path.'/'.'video.360.mp4' : false;
+          if (!$video_file)
+            $video_file = in_array( 'video.720.mp4', $files ) ? $directory_path.'/'.'video.720.mp4' : false;
+          if (!$video_file)
+            $video_file = in_array( 'video.360.url', $files ) ? $directory_path.'/'.'video.360.url' : false;
+          if (!$video_file)
+            $video_file = in_array( 'video.720.url', $files ) ? $directory_path.'/'.'video.720.url' : false;
 
-      drush_log('mxd file name:' .$mxd_file);
+          drush_log('mxd file name:' .$mxd_file);
+          $properties = array(
+	    'track' => array($track_id => $track_name),
+	    'session' => array($session_id => $session_name),
+          );
 
-      cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file,$collection_pid,$relationship);
-      sleep(4);
+//          drupal_set_message(sprintf("Track: %s\nSession: %s\nMXD: %s\nPaper: %s\nSlide: %s\nVideo: %s\nCollection: %s\nRelationship: %s\n\n",
+//                                     $track_name,$session_name,$mxd_file,$paper_file,$slide_file,$video_file,$collection_pid,$relationship));
+//          continue;
+
+          cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file,$collection_pid,$relationship,$properties);
+          sleep(3);
+
+        }
+
+      }
 
     }
   }
@@ -101,16 +157,15 @@ function cdio2011_doAction($collection_pid, $relationship, $input_directory) {
 /**
  * This function ingests per an object
  */
-function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file, $collection_pid, $relationship) {
+function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file,$collection_pid,$relationship,$properties) {
+  global $base_url;
   drush_log('Ingesting: ' . $mxd_file);
   drupal_set_message('Ingesting: ' . $mxd_file);
   module_load_include('inc', 'fedora_repository', 'api/fedora_item');
   module_load_include('inc', 'fedora_repository', 'MimeClass');
-  $child_relationship = "isMemberOf";
+  $child_relationship = "isDerivationOf";
   $mime_class = new MimeClass();
 
-#  $xml = simplexml_load_string(file_get_contents($mxd_file));
-#  $xml->registerXPathNamespace('mxd', "http://mx.forskningsdatabasen.dk/ns/mxd/1.2");
   $xsl = new DOMDocument();
   $xsl->load("/var/www/sites/all/modules/islandora_content_model_forms/transforms/mxd_to_dc.xsl");
   $proc = new XSLTProcessor();
@@ -123,14 +178,65 @@ function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file, $
   $results = $xpath->query("*[local-name()='title']");
   $label = utf8_decode($results->item(0)->nodeValue);
 
-#  $label = $xml->xpath('//mxd:title/mxd:original/mxd:main');
-#  $label = (string) $label[0]; //this mxd only has the one title
   drush_log('using label ' . $label);
   drupal_set_message('using label ' . $label);
   $mxd_xml = file_get_contents($mxd_file);
-#var_dump($dc_xml);
 
-#return;
+  list($track_id,$track_name) = each($properties['track']);
+  list($session_id,$session_name) = each($properties['session']);
+
+  $track_pid = sprintf("cdio2011:track_%s",$track_id);
+  $session_pid = sprintf("cdio2011:session_%s",$session_id);
+
+  $track_and_session_xml = sprintf('<dtu:conference xmlns:dtu="http://discoverygarden.cvt.dk/conference_level">
+  <dtu:track code="%s" label="%s" pid="%s">
+  <dtu:session code="%s" label="%s" pid="%s"></dtu:session>
+  </dtu:track>
+  </dtu:conference>',
+  $track_id,$track_name,$track_pid,$session_id,$session_name,$session_pid);
+
+  $folder_tn = $base_url."/sites/all/modules/islandora_dtu_mxd_talk/images/Crystal_Clear_filesystem_folder_grey.png";
+  $collection_policy = $base_url."/sites/all/modules/islandora_dtu_mxd_talk/xml/COLLECTION_POLICY.xml";
+
+//return;
+//  print "object $mxd_file has track $track_id = $track_name and session $session_id = $session_name\n";
+
+  $track_exists = @file_get_contents(variable_get('fedora_base_url','http://localhost:8080/fedora')."/objects/".$track_pid."?format=xml");
+  if (!$track_exists) {
+    // then it doesn't yet exist
+    drupal_set_message("PID $track_pid does not yet exist in the Repository","warning");
+    drush_log("PID $track_pid does not yet exist in the Repository");
+    $track_item = Fedora_Item::ingest_new_item($track_pid,'A',$track_name); //new skeleton object
+    $track_item->add_relationship($relationship, $collection_pid);
+    $track_item->add_relationship('hasModel', 'islandora:collectionCModel', FEDORA_MODEL_URI);
+    $track_item->add_datastream_from_url($folder_tn,'TN','Thumbnail.png','image/png','M','added jpeg thumbnail stream');
+    $track_item->add_datastream_from_url($collection_policy,'COLLECTION_POLICY','Collection Policy','text/xml','X','added collection policy');
+    sleep(1);
+  }
+
+  $track_item = new Fedora_Item($track_pid);
+
+  $session_exists = @file_get_contents(variable_get('fedora_base_url','http://localhost:8080/fedora')."/objects/".$session_pid."?format=xml");
+  if (!$session_exists) {
+    // then it doesn't yet exist
+    drupal_set_message("PID $session_pid does not yet exist in the Repository","warning");
+    drush_log("PID $session_pid does not yet exist in the Repository");
+    $session_item = Fedora_Item::ingest_new_item($session_pid,'A',$session_name); //new skeleton object
+    $session_item->add_relationship($relationship, $track_pid);
+    $session_item->add_relationship('hasModel', 'islandora:collectionCModel', FEDORA_MODEL_URI);
+    $session_item->add_datastream_from_url($folder_tn,'TN','Thumbnail.png','image/png','M','added jpeg thumbnail stream');
+    $session_item->add_datastream_from_url($collection_policy,'COLLECTION_POLICY','Collection Policy','text/xml','X','added collection policy');
+    sleep(1);
+  }
+
+  $session_item = new Fedora_Item($session_pid);
+
+//  var_dump($track_item->get_relationships());
+//  var_dump($session_item->get_relationships());
+
+//var_dump($mxd_xml);
+
+//return;
 
   $output = array();
   //uses fedora settings taken for islandora drupal settings
@@ -160,6 +266,10 @@ function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file, $
     drush_log('Failed adding MXD stream to ' . $new_pid . " using url $mxd_file");
     exit;
   }
+  
+  $object->add_datastream_from_string($track_name, 'TRACK', 'Track', 'text/plain', 'M', 'added track name');
+  $object->add_datastream_from_string($session_name, 'SESSION', 'Session', 'text/plain', 'M', 'added session name');
+  $object->add_datastream_from_string($track_and_session_xml, 'TRACK_AND_SESSION', 'Track and Session XML', 'text/xml', 'X', 'added session name');
 
   //primary conversions:
   if( $paper_file ) {
@@ -188,15 +298,15 @@ function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file, $
   } else {
     // no paper means we need to choose a default TN:
     if( $slide_file ) {
-      $default_tn_url = "http://localhost/sites/all/modules/islandora_dtu_mxd_talk/images/Crystal_Clear_mimetype_document.png";
+      $default_tn_url = $base_url."/sites/all/modules/islandora_dtu_mxd_talk/images/Crystal_Clear_mimetype_document.png";
     } elseif( $video_file ) {
-      $default_tn_url = "http://localhost/sites/all/modules/islandora_dtu_mxd_talk/images/video_120.png";
+      $default_tn_url = $base_url."/sites/all/modules/islandora_dtu_mxd_talk/images/video_120.png";
     } else {
-      $default_tn_url = "http://localhost/sites/all/modules/islandora_dtu_mxd_talk/images/mime.png";
+      $default_tn_url = $base_url."/sites/all/modules/islandora_dtu_mxd_talk/images/mime.png";
     }
     $object->add_datastream_from_url($default_tn_url,'TN','Thumbnail.png','image/png','M','added jpeg thumbnail stream');
   }
-  $object->add_relationship($relationship, $collection_pid);
+  $object->add_relationship($relationship, $session_pid);
   $object->add_relationship('hasModel', 'islandora:dtu_mxd_talk_cmodel', FEDORA_MODEL_URI);
 
 
@@ -251,13 +361,13 @@ function cdio2011_create_object($mxd_file,$paper_file,$slide_file,$video_file, $
       $video_stream_label = "Video.".$video_url_info['extension'];
       $video_object->add_datastream_from_url($video_url,'OBJ',$video_stream_label,$video_mimetype,'M','Added Video content');
       $video_object->add_datastream_from_url($video_url,'REF',$video_stream_label,$video_mimetype,'R','Added External Video Reference stream');
-      $video_object->add_datastream_from_url('http://localhost/sites/all/modules/islandora_dtu_mxd_talk/images/video.png','TN','Thumbnail.png','image/png','M','Added Thumbnail');
+      $video_object->add_datastream_from_url($base_url.'/sites/all/modules/islandora_dtu_mxd_talk/images/video.png','TN','Thumbnail.png','image/png','M','Added Thumbnail');
     } else {
       //ingest from file
       $video_mimetype = $mime_class->get_mimetype($video_file);
       $video_stream_label = "Video.".$video_file_info['extension'];
       $video_object->add_datastream_from_file($video_file,'OBJ',$video_stream_label,$video_mimetype,'M','Added Video content');
-      $video_object->add_datastream_from_url('http://localhost/sites/all/modules/islandora_dtu_mxd_talk/images/video.png','TN','Thumbnail.png','image/png','M','Added Thumbnail');
+      $video_object->add_datastream_from_url($base_url.'/sites/all/modules/islandora_dtu_mxd_talk/images/video.png','TN','Thumbnail.png','image/png','M','Added Thumbnail');
     }
     $video_object->add_relationship($child_relationship, $new_pid);
     $video_object->add_relationship('hasModel', 'islandora:dtu_dc_video_cmodel', FEDORA_MODEL_URI);
